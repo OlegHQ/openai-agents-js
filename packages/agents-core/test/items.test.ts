@@ -10,9 +10,53 @@ import {
   RunToolCallItem as ToolCallItem,
   RunToolCallOutputItem as ToolCallOutputItem,
   extractAllTextOutput,
+  stripLeakedReasoning,
 } from '../src/items';
 
 import { TEST_MODEL_MESSAGE, TEST_MODEL_FUNCTION_CALL } from './stubs';
+
+/**
+ * Tests for stripLeakedReasoning utility function.
+ * Some model endpoints may incorrectly include internal reasoning markers
+ * in the user-facing response text. This function removes such content.
+ */
+describe('items.stripLeakedReasoning', () => {
+  it('returns empty string unchanged', () => {
+    expect(stripLeakedReasoning('')).toBe('');
+  });
+
+  it('returns normal text unchanged', () => {
+    const text = 'Hello, how can I help you today?';
+    expect(stripLeakedReasoning(text)).toBe(text);
+  });
+
+  it('strips response_reasoning marker and everything after it', () => {
+    const text =
+      'Here is the answer.\nresponse_reasoning:\nThis is internal reasoning.';
+    expect(stripLeakedReasoning(text)).toBe('Here is the answer.');
+  });
+
+  it('strips response_reasoning with multiple newlines', () => {
+    const text =
+      'User message here.\n\nresponse_reasoning:\n\nMultiple lines of reasoning.\nMore reasoning.';
+    expect(stripLeakedReasoning(text)).toBe('User message here.');
+  });
+
+  it('strips response_reasoning without leading newline', () => {
+    const text = 'Short answer.response_reasoning:\nreasoning text';
+    expect(stripLeakedReasoning(text)).toBe('Short answer.');
+  });
+
+  it('handles text with only response_reasoning marker', () => {
+    const text = 'response_reasoning:\nonly reasoning';
+    expect(stripLeakedReasoning(text)).toBe('');
+  });
+
+  it('preserves text that contains "reasoning" as normal word', () => {
+    const text = 'My reasoning for this is that it works well.';
+    expect(stripLeakedReasoning(text)).toBe(text);
+  });
+});
 
 /**
  * The Item utilities are a foundational building block that a lot of higher
@@ -50,6 +94,32 @@ describe('items.extractAllTextOutput', () => {
     const combined = extractAllTextOutput([message1, toolCall, message2]);
 
     expect(combined).toBe('Hello WorldGood bye');
+  });
+});
+
+describe('MessageOutputItem.content', () => {
+  const agent = new Agent({ name: 'TestAgent' });
+
+  it('strips leaked reasoning markers from content', () => {
+    const messageWithLeakedReasoning = new MessageOutputItem(
+      {
+        ...TEST_MODEL_MESSAGE,
+        content: [
+          {
+            type: 'output_text' as const,
+            text: 'User answer.\nresponse_reasoning:\nInternal reasoning here.',
+          },
+        ],
+      },
+      agent,
+    );
+
+    expect(messageWithLeakedReasoning.content).toBe('User answer.');
+  });
+
+  it('returns normal content unchanged', () => {
+    const normalMessage = new MessageOutputItem(TEST_MODEL_MESSAGE, agent);
+    expect(normalMessage.content).toBe('Hello World');
   });
 });
 

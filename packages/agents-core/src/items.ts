@@ -1,6 +1,35 @@
 import { Agent } from './agent';
 import { toSmartString } from './utils/smartString';
 import * as protocol from './types/protocol';
+import logger from './logger';
+
+/**
+ * Pattern to detect leaked reasoning markers in model output.
+ * Some model endpoints may incorrectly include internal reasoning content
+ * in the user-facing response text. This pattern matches the marker and
+ * everything after it.
+ */
+const LEAKED_REASONING_PATTERN = /\n?response_reasoning:[\s\S]*/;
+
+/**
+ * Strips leaked reasoning content from model output text.
+ * Some model endpoints may incorrectly include internal reasoning markers
+ * (e.g., "response_reasoning:") in the user-facing response. This function
+ * removes such content to ensure clean output for end users.
+ *
+ * @param text - The text to sanitize
+ * @returns The text with leaked reasoning content removed
+ */
+export function stripLeakedReasoning(text: string): string {
+  if (!text || !LEAKED_REASONING_PATTERN.test(text)) {
+    return text;
+  }
+
+  logger.debug(
+    'Detected leaked reasoning marker in response text, stripping it',
+  );
+  return text.replace(LEAKED_REASONING_PATTERN, '').trimEnd();
+}
 
 export class RunItemBase {
   public readonly type: string = 'base_item' as const;
@@ -38,7 +67,7 @@ export class RunMessageOutputItem extends RunItemBase {
         content += part.text;
       }
     }
-    return content;
+    return stripLeakedReasoning(content);
   }
 }
 

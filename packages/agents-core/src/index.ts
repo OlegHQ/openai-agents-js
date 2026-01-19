@@ -87,6 +87,7 @@ export {
   RunToolApprovalItem,
   RunToolCallItem,
   RunToolCallOutputItem,
+  stripLeakedReasoning,
 } from './items';
 export { AgentHooks } from './lifecycle';
 export { getLogger } from './logger';

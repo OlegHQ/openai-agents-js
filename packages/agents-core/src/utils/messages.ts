@@ -1,5 +1,6 @@
 import { ResponseOutputItem } from '../types';
 import { ModelResponse } from '../model';
+import { stripLeakedReasoning } from '../items';
 
 /**
  * Get the last text from the output message.
@@ -22,7 +23,7 @@ export function getLastTextFromOutputMessage(
     return undefined;
   }
 
-  return lastItem.text;
+  return stripLeakedReasoning(lastItem.text);
 }
 
 /**

@@ -37,6 +37,21 @@ describe('utils/messages', () => {
     expect(getLastTextFromOutputMessage(item)).toBe('b');
   });
 
+  it('strips leaked reasoning markers from assistant message', () => {
+    const item: ResponseOutputItem = {
+      type: 'message',
+      role: 'assistant',
+      status: 'completed',
+      content: [
+        {
+          type: 'output_text',
+          text: 'Here is your answer.\nresponse_reasoning:\nInternal model reasoning.',
+        },
+      ],
+    } as any;
+    expect(getLastTextFromOutputMessage(item)).toBe('Here is your answer.');
+  });
+
   it('getOutputText returns last assistant text', () => {
     const response: ModelResponse = {
       usage: new Usage(),
