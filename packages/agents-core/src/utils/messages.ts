@@ -4,8 +4,6 @@ import { stripLeakedReasoning } from '../items';
 
 /**
  * Get the last text from the output message.
- * @param outputMessage
- * @returns
  */
 export function getLastTextFromOutputMessage(
   outputMessage: ResponseOutputItem,
@@ -27,9 +25,7 @@ export function getLastTextFromOutputMessage(
 }
 
 /**
- * Get the last text from the output message.
- * @param output
- * @returns
+ * Get the last text from the model response output.
  */
 export function getOutputText(output: ModelResponse) {
   if (output.output.length === 0) {

@@ -15,11 +15,6 @@ import {
 
 import { TEST_MODEL_MESSAGE, TEST_MODEL_FUNCTION_CALL } from './stubs';
 
-/**
- * Tests for stripLeakedReasoning utility function.
- * Some model endpoints may incorrectly include internal reasoning markers
- * in the user-facing response text. This function removes such content.
- */
 describe('items.stripLeakedReasoning', () => {
   it('returns empty string unchanged', () => {
     expect(stripLeakedReasoning('')).toBe('');

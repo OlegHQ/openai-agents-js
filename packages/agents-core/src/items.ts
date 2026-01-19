@@ -6,19 +6,14 @@ import logger from './logger';
 /**
  * Pattern to detect leaked reasoning markers in model output.
  * Some model endpoints may incorrectly include internal reasoning content
- * in the user-facing response text. This pattern matches the marker and
- * everything after it.
+ * (e.g., "response_reasoning:") in the user-facing response text. This pattern
+ * matches the marker and everything after it.
  */
 const LEAKED_REASONING_PATTERN = /\n?response_reasoning:[\s\S]*/;
 
 /**
- * Strips leaked reasoning content from model output text.
- * Some model endpoints may incorrectly include internal reasoning markers
- * (e.g., "response_reasoning:") in the user-facing response. This function
- * removes such content to ensure clean output for end users.
- *
- * @param text - The text to sanitize
- * @returns The text with leaked reasoning content removed
+ * Strips leaked reasoning content from model output text to ensure clean
+ * output for end users.
  */
 export function stripLeakedReasoning(text: string): string {
   if (!text || !LEAKED_REASONING_PATTERN.test(text)) {
