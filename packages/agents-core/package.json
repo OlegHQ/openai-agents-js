@@ -55,9 +55,11 @@
         "require": "./dist/shims/shims-node.js",
         "import": "./dist/shims/shims-node.mjs"
       },
-      "types": "./dist/shims/shims.d.ts",
-      "require": "./dist/shims/shims.js",
-      "import": "./dist/shims/shims.mjs"
+      "default": {
+        "types": "./dist/shims/shims-browser.d.ts",
+        "require": "./dist/shims/shims-browser.js",
+        "import": "./dist/shims/shims-browser.mjs"
+      }
     }
   },
   "keywords": [
