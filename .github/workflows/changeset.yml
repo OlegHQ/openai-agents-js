@@ -1,22 +1,33 @@
 name: Changeset
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, synchronize, edited]
 
 jobs:
   changeset-validation:
+    # Use pull_request_target so secrets are available for label/milestone updates.
+    # Always checkout base and fetch head to avoid executing forked code and reduce skipped checks.
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
       pull-requests: write
     steps:
-      - name: Checkout
+      - name: Checkout base
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
+      - name: Fetch PR head
+        env:
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Fetch commit objects only; do not execute forked code.
+          git fetch --no-tags --prune --recurse-submodules=no \
+            "https://github.com/${PR_HEAD_REPO}.git" \
+            "${PR_HEAD_SHA}"
       - name: Install pnpm
         uses: pnpm/action-setup@v4.2.0
         with:
@@ -40,7 +51,7 @@ jobs:
 
       - name: Run Codex changeset validation
         id: run_codex
-        if: ${{ !github.event.pull_request.head.repo.fork && github.actor != 'dependabot[bot]' }}
+        if: ${{ github.actor != 'dependabot[bot]' }}
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.PROD_OPENAI_API_KEY }}
@@ -60,3 +71,90 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm changeset:assign-milestone -- .github/codex/outputs/changeset-validation.json
+
+      - name: Sync package labels
+        if: ${{ steps.run_codex.conclusion == 'success' }}
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { execFileSync } = require('child_process');
+
+            const baseSha = context.payload.pull_request.base.sha;
+            const headSha = context.payload.pull_request.head.sha;
+
+            // Read changeset paths from git directly to avoid shell interpolation.
+            const diff = execFileSync(
+              'git',
+              ['diff', '--name-only', baseSha, headSha, '--', '.changeset'],
+              { encoding: 'utf8' },
+            ).trim();
+            const files = diff ? diff.split(/\r?\n/).filter(Boolean) : [];
+            const changesetFiles = files.filter(
+              (file) => file.endsWith('.md') && !file.endsWith('README.md'),
+            );
+
+            const packageToLabel = {
+              '@openai/agents-core': 'package:agents-core',
+              '@openai/agents-openai': 'package:agents-openai',
+              '@openai/agents-realtime': 'package:agents-realtime',
+              '@openai/agents-extensions': 'package:agents-extensions',
+            };
+
+            const desired = new Set();
+            for (const file of changesetFiles) {
+              let content;
+              try {
+                content = execFileSync('git', ['show', `${headSha}:${file}`], {
+                  encoding: 'utf8',
+                });
+              } catch (_error) {
+                continue;
+              }
+              const parts = content.split('---');
+              if (parts.length < 3) {
+                continue;
+              }
+              const frontmatter = parts[1];
+              for (const line of frontmatter.split(/\r?\n/)) {
+                const match = line.match(/["']?([^"':]+)["']?\s*:/);
+                if (!match) continue;
+                const pkg = match[1].trim();
+                const label = packageToLabel[pkg];
+                if (label) desired.add(label);
+              }
+            }
+
+            const packageLabels = new Set(Object.values(packageToLabel));
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = issue.labels.map((label) =>
+              typeof label === 'string' ? label : label.name,
+            );
+            const preserved = existing.filter(
+              (label) => !packageLabels.has(label),
+            );
+            const finalLabels = Array.from(new Set([...preserved, ...desired]));
+
+            const normalize = (labels) => labels.slice().sort();
+            const same =
+              normalize(existing).join('\n') === normalize(finalLabels).join('\n');
+
+            if (same) {
+              console.log('Package labels already up to date.');
+              return;
+            }
+
+            await github.rest.issues.setLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: finalLabels,
+            });
+
+            console.log(
+              `Updated labels: ${finalLabels.join(', ') || '(none)'}`,
+            );
